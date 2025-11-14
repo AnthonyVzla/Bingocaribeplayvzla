@@ -1,0 +1,1276 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bingo Caribe Play</title>
+    
+    <!-- Incluir los SDK de Firebase para App, Firestore y Auth -->
+    <!-- Usamos versiones compatibles y estables (v8.x para HTML simple) -->
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-auth.js"></script>
+
+    <style>
+        /* === VARIABLES Y ESTILOS BASE === */
+        :root {
+            --color-bg: #008080; /* Verde Azulado Caribe */
+            --color-bg-dark: #004d4d;
+            --color-primary: #ffcc00; /* Dorado/Amarillo */
+            --color-secondary: #ff5722; /* Naranja para resaltar */
+            --color-free: #3f51b5; /* Azul para el espacio libre */
+            --color-marcado: #4caf50; /* Verde de la marca */
+            --color-admin-text: #f0f0f0;
+            --color-admin-bg: #212121;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: var(--color-bg); 
+            color: #ffffff;
+            padding: 10px;
+            text-align: center;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 { margin-bottom: 5px; }
+
+        /* === PANTALLA DE SOPORTE (MARQUEE) === */
+        .marquee-support {
+            background-color: var(--color-bg-dark);
+            color: var(--color-primary);
+            padding: 5px 0;
+            font-size: 1.1em;
+            font-weight: bold;
+            border-top: 2px solid var(--color-primary);
+            border-bottom: 2px solid var(--color-primary);
+            margin-bottom: 15px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .marquee-content {
+            display: inline-block;
+            white-space: nowrap;
+            animation: marquee 15s linear infinite;
+        }
+
+        @keyframes marquee {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+        }
+
+        /* === CONTENEDOR PRINCIPAL === */
+        #main-container {
+            width: 100%;
+            max-width: 600px;
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+            flex-grow: 1;
+            margin-bottom: 10px;
+        }
+
+        /* === CARTÓN DE BINGO === */
+        #carton-container {
+            margin-top: 15px;
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 5px;
+            max-width: 300px; /* Tamaño máximo del cartón */
+            margin: 15px auto;
+            border: 3px solid var(--color-primary);
+            padding: 5px;
+            background-color: #006666;
+            border-radius: 8px;
+        }
+        .header-cell {
+            background-color: var(--color-secondary);
+            color: white;
+            font-size: 1.2em;
+            font-weight: bold;
+            padding: 8px 0;
+            border-radius: 4px;
+        }
+        .cell {
+            background-color: #ffffff;
+            color: #000000;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            font-weight: bold;
+            border-radius: 4px;
+            transition: background-color 0.2s, transform 0.1s;
+            cursor: pointer;
+        }
+        .cell:hover:not(.marcado) {
+            background-color: #f0f0f0;
+        }
+        .cell.marcado {
+            background-color: var(--color-marcado);
+            color: white;
+            transform: scale(1.05);
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        .cell.free {
+            background-color: var(--color-free);
+            color: white;
+        }
+
+        /* === BOTONES GENERALES === */
+        .btn {
+            background-color: var(--color-secondary);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.1s;
+            box-shadow: 0 4px 0 var(--color-bg-dark);
+            margin: 5px;
+            width: 100%;
+            max-width: 250px;
+        }
+
+        .btn:hover {
+            background-color: #e64a19; /* Tono más oscuro de naranja */
+        }
+
+        .btn:active {
+            transform: translateY(3px);
+            box-shadow: 0 1px 0 var(--color-bg-dark);
+        }
+
+        .btn:disabled {
+            background-color: #9e9e9e !important;
+            box-shadow: 0 4px 0 #616161 !important;
+            cursor: not-allowed !important;
+        }
+
+        /* === INFO Y MENSAJES === */
+        #info-general, #mensaje-estado {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            font-size: 1.05em;
+        }
+
+        #ultimas-bolas {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: var(--color-bg-dark);
+            border-radius: 8px;
+            box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.5);
+        }
+
+        .bola {
+            display: inline-block;
+            background-color: #f44336; /* Rojo */
+            color: white;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            line-height: 35px;
+            text-align: center;
+            font-size: 1.2em;
+            font-weight: bold;
+            margin: 3px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            transition: transform 0.2s;
+        }
+        .bola.nueva {
+            transform: scale(1.2);
+            background-color: #ffeb3b; /* Amarillo brillante para la última */
+            color: #000;
+        }
+
+        /* === ÁREA DE ADMINISTRADOR === */
+        #admin-area {
+            background-color: var(--color-admin-bg);
+            border: 2px solid var(--color-primary);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            width: 100%;
+            max-width: 600px;
+            text-align: left;
+            box-shadow: 0 4px 15px rgba(255, 204, 0, 0.3);
+        }
+        #admin-area h2 {
+            text-align: center;
+            color: var(--color-primary);
+            border-bottom: 1px solid var(--color-primary);
+            padding-bottom: 10px;
+            margin-top: 0;
+        }
+        #bolas-disponibles {
+            color: var(--color-admin-text);
+            font-size: 0.9em;
+            max-height: 80px;
+            overflow-y: auto;
+            border: 1px dashed var(--color-admin-text);
+            padding: 5px;
+            margin-bottom: 10px;
+        }
+        .admin-controls {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+        }
+        .admin-controls .btn {
+            width: 48%; /* Para dos columnas */
+            margin: 5px 0;
+            box-shadow: none;
+        }
+        
+        .admin-controls .btn-success { background-color: #4CAF50; }
+        .admin-controls .btn-success:hover { background-color: #45a049; }
+
+        .admin-controls .btn-danger { background-color: #f44336; }
+        .admin-controls .btn-danger:hover { background-color: #da190b; }
+
+        /* Estilos de Solicitudes */
+        #solicitudes-container, #reclamos-bingo-container {
+            margin-top: 15px;
+            max-height: 250px;
+            overflow-y: auto;
+            padding-right: 5px; /* Para el scrollbar */
+        }
+        .solicitud-item {
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .solicitud-actions .btn {
+            padding: 5px 10px;
+            font-size: 0.8em;
+            margin-left: 5px;
+            width: auto;
+            max-width: 100px;
+        }
+        
+        /* Modal de confirmación */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: var(--color-admin-bg);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            max-width: 90%;
+            min-width: 300px;
+            box-shadow: 0 0 20px var(--color-primary);
+        }
+        .modal-content h3 {
+            color: var(--color-primary);
+            margin-top: 0;
+        }
+        .modal-actions .btn {
+            margin: 10px 5px;
+            width: 120px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="marquee-support">
+        <div class="marquee-content">
+            <!-- Información de soporte -->
+            ¡Bienvenido a Bingo Caribe Play! Para cualquier soporte, contacta al +58 412 XXX-XXXX o escribe a soporte@bingocaribe.com. ¡Mucha suerte!
+        </div>
+    </div>
+
+    <div id="main-container">
+        <h1>Bingo Caribe Play</h1>
+        <div id="info-general">
+            Premio: <strong id="display-premio">Calculando...</strong> | Jugadores Activos: <strong id="display-jugadores">0</strong>
+        </div>
+
+        <!-- Área de Selección de Cartón / Estado del Juego -->
+        <div id="area-seleccion">
+            <input type="text" id="nombre-jugador" placeholder="Ingresa tu nombre o alias" style="padding: 8px; margin-bottom: 10px; width: 80%; max-width: 280px; border-radius: 5px; border: none; font-size: 1em;">
+            <button class="btn" id="btn-solicitar-carton">Solicitar Cartón ($5.00)</button>
+        </div>
+        
+        <div id="mensaje-estado" style="display: none;"></div>
+
+        <!-- Cartón del Jugador (Se muestra después de la aprobación) -->
+        <div id="carton-area" style="display: none;">
+            <div id="carton-container">
+                <!-- Aquí se renderizará el cartón -->
+            </div>
+            <button class="btn" id="btn-cantar-bingo" disabled>¡Cantar Bingo!</button>
+        </div>
+
+        <!-- Tablero General y Últimas Bolas -->
+        <div id="tablero-general-container" style="margin-top: 20px;">
+            <h2>Tablero de Bolas Extraídas</h2>
+            <div id="tablero-general">
+                <!-- Se renderiza el tablero 5x15 aquí -->
+            </div>
+            <div id="ultimas-bolas">
+                Últimas Bolas: <span id="display-ultimas-bolas">--</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Área de Administrador (Oculta por defecto) -->
+    <div id="admin-area" style="display: none;">
+        <h2>Panel de Administrador</h2>
+        
+        <h3>Controles del Juego</h3>
+        <div class="admin-controls">
+            <button class="btn btn-success" id="btn-extraer-bola">Extraer Bola</button>
+            <button class="btn btn-danger" id="btn-reiniciar-juego">Reiniciar Juego</button>
+            <button class="btn btn-success" id="btn-iniciar-juego">Iniciar Juego</button>
+        </div>
+
+        <h3>Bolas Disponibles (<span id="count-bolas-disponibles">75</span>)</h3>
+        <div id="bolas-disponibles"></div>
+
+        <h3>Solicitudes Pendientes (<span id="count-solicitudes-pendientes">0</span>)</h3>
+        <div id="solicitudes-container">
+            <!-- Solicitudes de pago se renderizan aquí -->
+        </div>
+        
+        <h3>Reclamos de Bingo (<span id="count-reclamos-bingo">0</span>)</h3>
+        <div id="reclamos-bingo-container">
+            <!-- Reclamos de bingo se renderizan aquí -->
+        </div>
+
+    </div>
+    
+    <!-- Modal para Confirmaciones y Mensajes (Oculto por defecto) -->
+    <div id="custom-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3 id="modal-title"></h3>
+            <p id="modal-message"></p>
+            <div id="modal-actions" class="modal-actions">
+                <!-- Botones de acción del modal -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =================================================================
+        // === CONFIGURACIÓN Y CONEXIÓN A FIREBASE (CRÍTICO PARA HOSTING) ===
+        // =================================================================
+
+        // 🚨 CONFIGURACIÓN DE FIREBASE (TU OBJETO REAL)
+        const firebaseConfig = {
+          apiKey: "AIzaSyA-6GMYR0ds2xN_pGOPHhXMptlbZfww9dU",
+          authDomain: "bingocaribeplay.firebaseapp.com",
+          projectId: "bingocaribeplay",
+          storageBucket: "bingocaribeplay.firebasestorage.app",
+          messagingSenderId: "279358768752",
+          appId: "1:279358768752:web:d0abf9a52c5f7455c096b5"
+        };
+
+        // Inicializar Firebase
+        let db;
+        let auth;
+        let jugadorId;
+        
+        try {
+            const app = firebase.initializeApp(firebaseConfig);
+            db = firebase.firestore();
+            auth = firebase.auth();
+            
+            // Autenticación anónima para identificar al usuario
+            auth.signInAnonymously()
+                .then(() => {
+                    jugadorId = auth.currentUser.uid;
+                    console.log("Usuario autenticado anónimamente:", jugadorId);
+                    // Una vez autenticado, iniciamos la lógica del juego
+                    iniciarLogicaJuego(jugadorId);
+                })
+                .catch((error) => {
+                    console.error("Error en la autenticación anónima:", error);
+                    mostrarModal('Error de Conexión', `No se pudo conectar al sistema de juego: ${error.message}.`, 'Aceptar');
+                });
+
+        } catch (e) {
+            console.error("Error al inicializar Firebase. Asegúrate de pegar tu 'firebaseConfig' correcto:", e);
+            // Si falla la inicialización, no podemos continuar con la lógica que depende de DB
+            document.getElementById('main-container').innerHTML = `<h2 style="color: var(--color-secondary);">Error Crítico</h2><p>No se pudo conectar a la base de datos. Verifique su configuración de Firebase.</p>`;
+        }
+        
+        // =================================================================
+        // === VARIABLES GLOBALES Y CONSTANTES ===
+        // =================================================================
+        const APP_ID = firebaseConfig.projectId; // Usamos el projectId como identificador
+        const JUEGO_DOC_PATH = `artifacts/${APP_ID}/public/data/juego/estado`; // Ruta pública para el estado del juego
+        const PAGOS_COLLECTION = `artifacts/${APP_ID}/public/data/pagos`; // Colección pública para pagos
+        const CARTONES_COLLECTION = `artifacts/${APP_ID}/public/data/cartones`; // Colección pública para cartones
+        
+        // 🚨 IMPORTANTE: REEMPLAZA ESTA CADENA con el UID real del usuario que actuará como administrador 
+        // ¡Cópialo de la Consola del navegador la primera vez que inicies la app!
+        const ADMIN_ID = "admin_user_id"; 
+        
+        let estadoJuego = 'INICIO';
+        let miCarton = null;
+        let miNombre = localStorage.getItem('bingo_nombre') || '';
+        let miCartonID = localStorage.getItem('bingo_carton_id') || null; // ID del documento del cartón del jugador
+        let currentUserPaymentID = localStorage.getItem('bingo_payment_id') || null;
+        
+        const PRECIO_CARTON = 5.00; // Precio fijo del cartón
+        const MIN_BOLAS = 30; // Mínimo de bolas para cantar bingo
+
+        // Estado global del juego (sincronizado con Firestore)
+        let estadoGlobal = {
+            bolasExtraidas: [],
+            totalJugadores: 0,
+            premioAcumulado: 0,
+            juegoEnCurso: false,
+            reclamosBingo: [],
+            solicitudesPago: [],
+            ultimaBola: null,
+        };
+
+        // =================================================================
+        // === LÓGICA DE INICIO Y ESTABLECIMIENTO DE LISTENERS ===
+        // =================================================================
+
+        function iniciarLogicaJuego(uId) {
+            jugadorId = uId;
+            document.getElementById('nombre-jugador').value = miNombre;
+            
+            // 1. Mostrar/Ocultar área de administración
+            if (jugadorId === ADMIN_ID) {
+                document.getElementById('admin-area').style.display = 'block';
+                document.getElementById('area-seleccion').style.display = 'none';
+                document.log("Modo Administrador activado.");
+            } else if (miCartonID) {
+                // Si es jugador y ya tiene cartón asignado
+                ocultarAreaSeleccion(true);
+            }
+            
+            // 2. Establecer oyentes de Firestore
+            setupFirestoreListeners();
+            
+            // 3. Inicializar eventos UI
+            setupEventListeners();
+            
+            // 4. Si hay pago pendiente, reanudar estado
+            if (currentUserPaymentID && !miCartonID) {
+                reanudarEsperaPago();
+            }
+            
+            // Inicializar el tablero visual para que se vea
+            inicializarTableroGeneral();
+        }
+        
+        function reanudarEsperaPago() {
+            document.getElementById('area-seleccion').style.display = 'none';
+            document.getElementById('carton-area').style.display = 'none';
+
+            const mensajeContainer = document.getElementById('mensaje-estado');
+            mensajeContainer.style.display = 'block';
+            mensajeContainer.innerHTML = `
+                Esperando aprobación del administrador. Tu ID de pago es: <strong style="color: var(--color-primary);">${currentUserPaymentID}</strong>. 
+                <br>
+                <button id="btn-cancelar-espera" class="btn btn-danger" style="margin-top: 10px; background-color: #f44336; color: white; padding: 5px 10px; border-radius: 5px; font-weight: bold;">
+                    Cancelar Solicitud
+                </button>
+            `;
+            estadoJuego = 'ESPERA_PAGO';
+            document.getElementById('btn-cancelar-espera').addEventListener('click', cancelarEspera);
+        }
+
+        function setupFirestoreListeners() {
+            // Oyente para el Estado Global del Juego
+            db.doc(JUEGO_DOC_PATH).onSnapshot(doc => {
+                if (doc.exists) {
+                    estadoGlobal = doc.data();
+                    
+                    // Actualizar UI general
+                    actualizarDisplayPremio();
+                    renderizarTableroGeneral(estadoGlobal.bolasExtraidas);
+                    renderizarUltimasBolas(estadoGlobal.ultimaBola);
+                    
+                    // Lógica para jugador (solo si tiene cartón)
+                    if (miCarton && miCartonID) {
+                        actualizarCartonUI();
+                        actualizarBotonBingo();
+                    } else if (miCartonID && !miCarton) {
+                         // Intentar buscar el cartón si solo tenemos el ID
+                         db.doc(`${CARTONES_COLLECTION}/${miCartonID}`).get().then(docCarton => {
+                             if (docCarton.exists) {
+                                 miCarton = docCarton.data();
+                                 ocultarAreaSeleccion(true);
+                                 actualizarBotonBingo();
+                                 actualizarCartonUI();
+                                 // Quitar el estado de espera si el cartón ya apareció
+                                 currentUserPaymentID = null;
+                                 localStorage.removeItem('bingo_payment_id');
+                             }
+                         });
+                    }
+                } else {
+                    // Inicializar el documento si no existe (solo la primera vez)
+                    db.doc(JUEGO_DOC_PATH).set({
+                        bolasExtraidas: [],
+                        totalJugadores: 0,
+                        premioAcumulado: 0,
+                        juegoEnCurso: false,
+                        reclamosBingo: [],
+                        solicitudesPago: [],
+                        ultimaBola: null,
+                    }, { merge: true });
+                }
+            }, error => console.error("Error al escuchar estado del juego:", error));
+            
+            // Oyente para el Cartón del Jugador (si ya tiene uno)
+            if (miCartonID) {
+                db.doc(`${CARTONES_COLLECTION}/${miCartonID}`).onSnapshot(doc => {
+                    if (doc.exists) {
+                        miCarton = doc.data();
+                        actualizarCartonUI();
+                        actualizarBotonBingo();
+                        ocultarAreaSeleccion(true); // Asegurar que la UI cambie
+                    } else if (miCarton) {
+                        // El cartón fue eliminado (ej. juego reiniciado)
+                        mostrarModal('Juego Reiniciado', 'El juego ha sido reiniciado por el administrador. Por favor, solicita un nuevo cartón.', 'Aceptar');
+                        resetearEstadoJugador();
+                    }
+                }, error => console.error("Error al escuchar mi cartón:", error));
+            }
+
+            // Oyentes Solo Admin
+            if (jugadorId === ADMIN_ID) {
+                // Oyente para Solicitudes de Pago
+                db.collection(PAGOS_COLLECTION).where('estado', '==', 'PENDIENTE').onSnapshot(snapshot => {
+                    const pagosPendientes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    estadoGlobal.solicitudesPago = pagosPendientes; // Actualizar estado global local
+                    renderizarSolicitudesAdmin('solicitudes-container', pagosPendientes, 'pago');
+                }, error => console.error("Error al escuchar pagos:", error));
+                
+                // Oyente para Reclamos de Bingo (ya se actualizan en el listener del estado global, pero reforzamos la UI)
+                db.doc(JUEGO_DOC_PATH).onSnapshot(doc => {
+                    if (doc.exists) {
+                        const reclamos = doc.data().reclamosBingo || [];
+                        renderizarSolicitudesAdmin('reclamos-bingo-container', reclamos, 'bingo');
+                    }
+                }, error => console.error("Error al escuchar reclamos de bingo:", error));
+            }
+        }
+        
+        function actualizarBotonBingo() {
+            if (!miCarton) return;
+            const btnBingo = document.getElementById('btn-cantar-bingo');
+            const esBingo = verificarBingo(miCarton.numeros, estadoGlobal.bolasExtraidas);
+            const esReclamoPendiente = estadoGlobal.reclamosBingo.some(r => r.userId === jugadorId);
+
+            if (esBingo && estadoGlobal.bolasExtraidas.length >= MIN_BOLAS && !esReclamoPendiente && estadoGlobal.juegoEnCurso) {
+                btnBingo.disabled = false;
+                btnBingo.textContent = "¡Cantar Bingo!";
+            } else if (esReclamoPendiente) {
+                btnBingo.disabled = true;
+                btnBingo.textContent = "Reclamo Pendiente...";
+            } else if (!estadoGlobal.juegoEnCurso) {
+                btnBingo.disabled = true;
+                btnBingo.textContent = "Juego Detenido/Esperando";
+            } else {
+                btnBingo.disabled = true;
+                btnBingo.textContent = "¡Cantar Bingo!";
+            }
+        }
+
+        // =================================================================
+        // === LÓGICA DEL JUGADOR ===
+        // =================================================================
+        
+        function generarCarton() {
+            const carton = {};
+            const rangos = { 'B': [1, 15], 'I': [16, 30], 'N': [31, 45], 'G': [46, 60], 'O': [61, 75] };
+            const letras = ['B', 'I', 'N', 'G', 'O'];
+
+            letras.forEach(letra => {
+                const [min, max] = rangos[letra];
+                const numerosDisponibles = Array.from({ length: max - min + 1 }, (_, i) => i + min);
+                
+                // Seleccionar 5 números únicos para esta columna
+                for (let i = 1; i <= 5; i++) {
+                    const key = letra + i;
+                    if (letra === 'N' && i === 3) { // N3 es el espacio libre
+                        carton[key] = 'FREE'; 
+                    } else {
+                        const index = Math.floor(Math.random() * numerosDisponibles.length);
+                        const numero = numerosDisponibles.splice(index, 1)[0];
+                        carton[key] = numero;
+                    }
+                }
+            });
+            return carton;
+        }
+
+        function solicitarCarton() {
+            miNombre = document.getElementById('nombre-jugador').value.trim();
+            if (!miNombre) {
+                mostrarModal('Error', 'Por favor, ingresa tu nombre o alias para solicitar un cartón.', 'Aceptar');
+                return;
+            }
+            if (estadoGlobal.juegoEnCurso) {
+                 mostrarModal('Juego en Curso', 'El juego ya ha comenzado. Debes esperar a que termine para participar.', 'Aceptar');
+                return;
+            }
+            if (currentUserPaymentID) {
+                mostrarModal('Pendiente', 'Ya tienes una solicitud de pago pendiente. Espera la aprobación.', 'Aceptar');
+                return;
+            }
+
+            // 1. Crear solicitud de pago
+            const nuevoPago = {
+                userId: jugadorId,
+                nombre: miNombre,
+                fecha: firebase.firestore.FieldValue.serverTimestamp(),
+                monto: PRECIO_CARTON,
+                estado: 'PENDIENTE',
+            };
+
+            db.collection(PAGOS_COLLECTION).add(nuevoPago)
+                .then(docRef => {
+                    currentUserPaymentID = docRef.id;
+                    localStorage.setItem('bingo_payment_id', currentUserPaymentID);
+                    localStorage.setItem('bingo_nombre', miNombre);
+                    
+                    // 2. Transicionar al estado de espera
+                    reanudarEsperaPago();
+                    mostrarModal('Pago Solicitado', `Tu solicitud de cartón ha sido enviada al administrador. ID de Pago: <strong>${currentUserPaymentID}</strong>. Recibirás tu cartón una vez aprobado.`, 'Entendido');
+                    
+                    // 3. Ocultar la zona de selección
+                    document.getElementById('area-seleccion').style.display = 'none';
+                    document.getElementById('mensaje-estado').style.display = 'block';
+
+                })
+                .catch(error => {
+                    console.error("Error al solicitar pago:", error);
+                    mostrarModal('Error', 'No se pudo crear la solicitud de pago. Inténtalo de nuevo.', 'Aceptar');
+                });
+        }
+        
+        function cancelarEspera() {
+             mostrarModal('Confirmar Cancelación', 
+                '¿Estás seguro de que deseas cancelar tu solicitud de cartón? Tendrás que volver a solicitarlo.', 
+                'Sí, Cancelar', 
+                'No, Esperar',
+                () => { // Acción de Sí, Cancelar
+                    if (currentUserPaymentID) {
+                        // Intentar marcar el pago como CANCELADO
+                        db.doc(`${PAGOS_COLLECTION}/${currentUserPaymentID}`).update({
+                            estado: 'CANCELADO',
+                            fechaCancelacion: firebase.firestore.FieldValue.serverTimestamp()
+                        }).then(() => {
+                            mostrarModal('Cancelado', 'Tu solicitud ha sido cancelada.', 'Aceptar');
+                            resetearEstadoJugador();
+                        }).catch(error => {
+                            console.error("Error al cancelar pago:", error);
+                            mostrarModal('Error', 'No se pudo cancelar la solicitud en la base de datos.', 'Aceptar');
+                        });
+                    } else {
+                        resetearEstadoJugador();
+                    }
+                }
+            );
+        }
+        
+        function ocultarAreaSeleccion(cartonExiste) {
+            document.getElementById('area-seleccion').style.display = 'none';
+            document.getElementById('mensaje-estado').style.display = 'none';
+            document.getElementById('carton-area').style.display = 'block';
+            
+            if (cartonExiste && !document.getElementById('carton-container').hasChildNodes()) {
+                renderizarCarton();
+            }
+        }
+
+        function toggleMarcarNumero(key) {
+            if (!miCarton || !estadoGlobal.juegoEnCurso) return;
+            
+            const numeroValor = miCarton.numeros[key];
+            
+            // 1. Verificar si el número fue extraído (solo si no es FREE)
+            if (numeroValor !== 'FREE' && !estadoGlobal.bolasExtraidas.includes(numeroValor)) {
+                mostrarModal('Error', `El número ${numeroValor} aún no ha sido extraído.`, 'Entendido');
+                return;
+            }
+            
+            // 2. Toggle el estado marcado
+            const estaMarcado = miCarton.marcados.includes(key);
+            
+            let nuevosMarcados = [...miCarton.marcados];
+            if (estaMarcado) {
+                // No permitir desmarcar el FREE space
+                if (key !== 'N3') {
+                    nuevosMarcados = nuevosMarcados.filter(n => n !== key);
+                }
+            } else {
+                nuevosMarcados.push(key);
+            }
+
+            // 3. Actualizar Firestore
+            db.doc(`${CARTONES_COLLECTION}/${miCartonID}`).update({
+                marcados: nuevosMarcados
+            }).catch(error => {
+                console.error("Error al marcar número:", error);
+                mostrarModal('Error', 'No se pudo actualizar el cartón.', 'Aceptar');
+            });
+        }
+
+        function cantarBingo() {
+            if (!miCarton || !estadoGlobal.juegoEnCurso) return;
+            
+            const bolasExtraidas = estadoGlobal.bolasExtraidas;
+            if (bolasExtraidas.length < MIN_BOLAS) {
+                 mostrarModal('Espera', `Deben haberse extraído al menos ${MIN_BOLAS} bolas para cantar Bingo.`, 'Entendido');
+                 return;
+            }
+
+            const esBingo = verificarBingo(miCarton.numeros, bolasExtraidas);
+            const esReclamoPendiente = estadoGlobal.reclamosBingo.some(r => r.userId === jugadorId);
+
+            if (esReclamoPendiente) {
+                 mostrarModal('Pendiente', 'Ya tienes un reclamo de BINGO pendiente de revisión.', 'Entendido');
+                 return;
+            }
+
+            if (esBingo) {
+                 mostrarModal('Confirmar Bingo', 
+                    '¡Felicidades! ¿Estás seguro de que tienes BINGO? Se enviará la solicitud al administrador.', 
+                    '¡Sí, Tengo Bingo!', 
+                    'No, Esperar',
+                    () => {
+                        // Enviar reclamo de bingo al estado global
+                        const nuevoReclamo = {
+                            userId: jugadorId,
+                            nombre: miNombre,
+                            cartonId: miCartonID,
+                            fecha: firebase.firestore.FieldValue.serverTimestamp(),
+                            estado: 'PENDIENTE',
+                            bolasAlReclamo: bolasExtraidas.length
+                        };
+                        
+                        // Actualizar el estado global con el reclamo
+                        db.doc(JUEGO_DOC_PATH).update({
+                            reclamosBingo: firebase.firestore.FieldValue.arrayUnion(nuevoReclamo)
+                        }).then(() => {
+                            mostrarModal('Reclamo Enviado', '¡Tu reclamo de BINGO ha sido enviado! Espera la validación del administrador.', 'Entendido');
+                        }).catch(error => {
+                            console.error("Error al cantar bingo:", error);
+                            mostrarModal('Error', 'No se pudo enviar el reclamo de Bingo.', 'Aceptar');
+                        });
+                    }
+                );
+            } else {
+                mostrarModal('Aún No es Bingo', 'Lo siento, tu cartón aún no cumple con las condiciones de BINGO con las bolas extraídas.', 'Aceptar');
+            }
+        }
+        
+        function verificarBingo(cartonNumeros, bolasExtraidas) {
+            // Obtener todos los valores del cartón, excluyendo 'FREE'
+            const numerosCarton = Object.values(cartonNumeros).filter(n => n !== 'FREE');
+            
+            // Verificar si TODOS los números del cartón están en las bolas extraídas
+            const numerosFaltantes = numerosCarton.filter(numero => !bolasExtraidas.includes(numero));
+
+            // Si no falta ningún número, es Bingo
+            return numerosFaltantes.length === 0;
+        }
+
+        function resetearEstadoJugador() {
+            miCarton = null;
+            miCartonID = null;
+            currentUserPaymentID = null;
+            miNombre = '';
+            localStorage.removeItem('bingo_carton_id');
+            localStorage.removeItem('bingo_payment_id');
+            localStorage.removeItem('bingo_nombre');
+            
+            document.getElementById('carton-area').style.display = 'none';
+            document.getElementById('area-seleccion').style.display = 'block';
+            document.getElementById('mensaje-estado').style.display = 'none';
+            document.getElementById('nombre-jugador').value = '';
+            estadoJuego = 'INICIO';
+        }
+
+        // =================================================================
+        // === LÓGICA DEL ADMINISTRADOR ===
+        // =================================================================
+        
+        function extraerBola() {
+            if (!estadoGlobal.juegoEnCurso) {
+                mostrarModal('Error', 'El juego no ha comenzado. Usa el botón "Iniciar Juego".', 'Aceptar');
+                return;
+            }
+
+            const todasLasBolas = Array.from({ length: 75 }, (_, i) => i + 1);
+            const bolasDisponibles = todasLasBolas.filter(bola => !estadoGlobal.bolasExtraidas.includes(bola));
+
+            if (bolasDisponibles.length === 0) {
+                mostrarModal('Fin del Juego', '¡Se han extraído todas las 75 bolas!', 'Aceptar');
+                return;
+            }
+
+            const indice = Math.floor(Math.random() * bolasDisponibles.length);
+            const nuevaBola = bolasDisponibles[indice];
+
+            // 1. Actualizar el estado global en Firestore
+            db.doc(JUEGO_DOC_PATH).update({
+                bolasExtraidas: firebase.firestore.FieldValue.arrayUnion(nuevaBola),
+                ultimaBola: nuevaBola
+            }).then(() => {
+                console.log(`Bola extraída: ${nuevaBola}`);
+            }).catch(error => {
+                console.error("Error al extraer bola:", error);
+                mostrarModal('Error', 'No se pudo extraer la bola.', 'Aceptar');
+            });
+        }
+        
+        function iniciarJuegoAdmin() {
+            if (estadoGlobal.juegoEnCurso) {
+                 mostrarModal('Error', 'El juego ya está en curso.', 'Aceptar');
+                 return;
+            }
+            
+            mostrarModal('Confirmar Inicio', 
+                '¿Estás seguro de que quieres iniciar un nuevo juego? Se cerrarán las solicitudes de cartón.', 
+                'Sí, Iniciar', 
+                'Cancelar',
+                () => {
+                    db.doc(JUEGO_DOC_PATH).update({
+                        juegoEnCurso: true
+                    }).then(() => {
+                        mostrarModal('Juego Iniciado', 'El juego ha comenzado. ¡A extraeer bolas!', 'Entendido');
+                    }).catch(error => {
+                        console.error("Error al iniciar juego:", error);
+                        mostrarModal('Error', 'No se pudo iniciar el juego.', 'Aceptar');
+                    });
+                }
+            );
+        }
+
+        function reiniciarJuego() {
+            mostrarModal('Confirmar Reinicio', 
+                '¡ADVERTENCIA! ¿Estás seguro de que quieres reiniciar el juego? Esto borrará el estado del juego, las bolas, y los cartones de TODOS los jugadores.', 
+                'Sí, Reiniciar', 
+                'Cancelar',
+                () => {
+                    // 1. Resetear el estado global
+                    db.doc(JUEGO_DOC_PATH).set({
+                        bolasExtraidas: [],
+                        totalJugadores: 0,
+                        premioAcumulado: 0,
+                        juegoEnCurso: false,
+                        reclamosBingo: [],
+                        solicitudesPago: [],
+                        ultimaBola: null,
+                    }).then(() => {
+                        // 2. Eliminar todos los cartones (esto forzará a los jugadores a resetear)
+                        return db.collection(CARTONES_COLLECTION).get().then(snapshot => {
+                            const batch = db.batch();
+                            snapshot.docs.forEach(doc => {
+                                batch.delete(doc.ref);
+                            });
+                            return batch.commit();
+                        });
+                    }).then(() => {
+                        // 3. Marcar todos los pagos como procesados para que no vuelvan a aparecer
+                        return db.collection(PAGOS_COLLECTION).get().then(snapshot => {
+                            const batch = db.batch();
+                            snapshot.docs.forEach(doc => {
+                                // Solo marcamos los pendientes para evitar la creación de cartones en el reinicio
+                                if (doc.data().estado === 'PENDIENTE') {
+                                    batch.update(doc.ref, { estado: 'PROCESADO_REINICIO' });
+                                }
+                            });
+                            return batch.commit();
+                        });
+                    }).then(() => {
+                        mostrarModal('Juego Reiniciado', 'El juego ha sido completamente reiniciado.', 'Aceptar');
+                    }).catch(error => {
+                        console.error("Error al reiniciar juego:", error);
+                        mostrarModal('Error', 'Error al reiniciar el juego.', 'Aceptar');
+                    });
+                }
+            );
+        }
+
+        function aprobarPagoAdmin(pagoId, userId, nombre) {
+            if (estadoGlobal.juegoEnCurso) {
+                 mostrarModal('Juego en Curso', 'No se pueden aprobar cartones cuando el juego ya está iniciado.', 'Aceptar');
+                 return;
+            }
+            
+            // 1. Generar cartón
+            const cartonData = {
+                userId: userId,
+                nombre: nombre,
+                numeros: generarCarton(), // Objeto de números (ej: {B1: 1, B2: 5, ...})
+                marcados: ['N3'], // El FREE space siempre está marcado (key N3)
+                fechaCreacion: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            // 2. Guardar cartón en la colección CARTONES
+            db.collection(CARTONES_COLLECTION).add(cartonData)
+                .then(cartonRef => {
+                    // 3. Actualizar estado del pago a 'APROBADO' y añadir ID del cartón
+                    return db.doc(`${PAGOS_COLLECTION}/${pagoId}`).update({
+                        estado: 'APROBADO',
+                        cartonId: cartonRef.id,
+                        fechaAprobacion: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                })
+                .then(() => {
+                    // 4. Actualizar contadores del juego
+                    return db.doc(JUEGO_DOC_PATH).update({
+                        totalJugadores: firebase.firestore.FieldValue.increment(1),
+                        premioAcumulado: firebase.firestore.FieldValue.increment(PRECIO_CARTON)
+                    });
+                })
+                .then(() => {
+                    mostrarModal('Aprobación Exitosa', `Cartón asignado a ${nombre}.`, 'Entendido');
+                })
+                .catch(error => {
+                    console.error("Error al aprobar pago:", error);
+                    mostrarModal('Error', 'No se pudo completar la aprobación.', 'Aceptar');
+                });
+        }
+
+        function rechazarPagoAdmin(pagoId) {
+            db.doc(`${PAGOS_COLLECTION}/${pagoId}`).update({
+                estado: 'RECHAZADO',
+                fechaRechazo: firebase.firestore.FieldValue.serverTimestamp()
+            }).then(() => {
+                mostrarModal('Rechazo Exitoso', `Solicitud ${pagoId} rechazada.`, 'Entendido');
+            }).catch(error => {
+                console.error("Error al rechazar pago:", error);
+                mostrarModal('Error', 'No se pudo rechazar la solicitud.', 'Aceptar');
+            });
+        }
+        
+        function aprobarBingoAdmin(reclamo, index) {
+            mostrarModal('Confirmar Ganador', 
+                `¿Confirmas que <strong>${reclamo.nombre}</strong> es el ganador (Bingo verificado)? Esto detendrá el juego.`, 
+                'Sí, Ganador', 
+                'Cancelar',
+                () => {
+                    // 1. Detener el juego
+                    db.doc(JUEGO_DOC_PATH).update({
+                        juegoEnCurso: false
+                    }).then(() => {
+                        // 2. Mover el reclamo de pendiente a GANADO (creando un nuevo objeto para evitar mutación directa)
+                        const reclamosPendientes = estadoGlobal.reclamosBingo.filter((_, i) => i !== index);
+                        const reclamoGanado = { 
+                            ...reclamo, 
+                            estado: 'GANADO', 
+                            fechaValidacion: firebase.firestore.FieldValue.serverTimestamp() 
+                        };
+                        
+                        // 3. Actualizar el estado global sin el reclamo y con el juego detenido
+                        return db.doc(JUEGO_DOC_PATH).update({
+                            reclamosBingo: reclamosPendientes,
+                            ultimoGanador: reclamoGanado, // Guardar el ganador
+                        });
+                    }).then(() => {
+                        mostrarModal('¡Bingo Confirmado!', `¡${reclamo.nombre} ha ganado el Bingo! El juego ha finalizado. Usa "Reiniciar Juego" para comenzar de nuevo.`, 'Aceptar');
+                    }).catch(error => {
+                        console.error("Error al aprobar bingo:", error);
+                        mostrarModal('Error', 'No se pudo validar el bingo.', 'Aceptar');
+                    });
+                }
+            );
+        }
+
+        function rechazarBingoAdmin(reclamo, index) {
+            // 1. Remover el reclamo de la lista
+            const reclamosPendientes = estadoGlobal.reclamosBingo.filter((_, i) => i !== index);
+            
+            db.doc(JUEGO_DOC_PATH).update({
+                reclamosBingo: reclamosPendientes
+            }).then(() => {
+                mostrarModal('Rechazo de Bingo', `Reclamo de ${reclamo.nombre} rechazado. El juego continúa.`, 'Entendido');
+            }).catch(error => {
+                console.error("Error al rechazar bingo:", error);
+                mostrarModal('Error', 'No se pudo rechazar el reclamo.', 'Aceptar');
+            });
+        }
+
+        // =================================================================
+        // === FUNCIONES DE RENDERIZADO Y UI ===
+        // =================================================================
+
+        function renderizarCarton() {
+            if (!miCarton) return;
+            const container = document.getElementById('carton-container');
+            container.innerHTML = '';
+            
+            const letras = ['B', 'I', 'N', 'G', 'O'];
+            
+            // Renderizar encabezados (BINGO)
+            letras.forEach(letra => {
+                container.innerHTML += `<div class="header-cell">${letra}</div>`;
+            });
+
+            // Renderizar números
+            for (let i = 1; i <= 5; i++) {
+                letras.forEach(letra => {
+                    const key = letra + i; // ej: B1, I3, N3
+                    const numero = miCarton.numeros[key];
+                    const esFree = numero === 'FREE';
+                    
+                    const cell = document.createElement('div');
+                    cell.className = `cell ${esFree ? 'free' : ''}`;
+                    cell.textContent = esFree ? 'FREE' : numero;
+                    cell.dataset.key = key;
+
+                    if (key !== 'N3') {
+                         // Añadir el listener para marcar/desmarcar
+                        cell.addEventListener('click', () => toggleMarcarNumero(key));
+                    }
+                    container.appendChild(cell);
+                });
+            }
+        }
+        
+        function actualizarCartonUI() {
+            if (!miCarton) return;
+
+            // Iterar sobre las celdas y actualizar el estado visual
+            const cartonCells = document.querySelectorAll('#carton-container .cell');
+            cartonCells.forEach(cell => {
+                const key = cell.dataset.key; 
+                
+                // Si está marcado en Firestore, añadir la clase 'marcado'
+                const estaMarcado = miCarton.marcados.includes(key);
+                
+                cell.classList.remove('marcado');
+
+                if (estaMarcado) {
+                    cell.classList.add('marcado');
+                }
+            });
+            
+            // Renderizar la primera vez si aún no se ha hecho
+            if (!document.getElementById('carton-container').hasChildNodes()) {
+                renderizarCarton();
+            }
+        }
+
+        function inicializarTableroGeneral() {
+             // Crear la estructura HTML del tablero general vacío
+            const tablero = document.getElementById('tablero-general');
+            tablero.className = 'tablero-general-grid'; 
+            tablero.style.display = 'grid';
+            tablero.style.gridTemplateColumns = 'repeat(15, 1fr)';
+            tablero.style.gap = '2px';
+            tablero.style.maxWidth = '600px';
+            tablero.style.margin = '0 auto';
+            tablero.style.marginTop = '10px';
+            tablero.style.padding = '5px';
+            tablero.style.backgroundColor = 'var(--color-bg-dark)';
+            tablero.style.borderRadius = '5px';
+
+            for (let i = 1; i <= 75; i++) {
+                const cell = document.createElement('div');
+                cell.id = `bola-general-${i}`;
+                cell.className = 'general-cell';
+                cell.textContent = i;
+                cell.style.backgroundColor = '#ffffff';
+                cell.style.color = '#000000';
+                cell.style.padding = '5px 0';
+                cell.style.fontSize = '0.7em';
+                cell.style.fontWeight = 'bold';
+                cell.style.borderRadius = '3px';
+                cell.style.transition = 'background-color 0.3s, color 0.3s';
+                tablero.appendChild(cell);
+            }
+        }
+        
+        function renderizarTableroGeneral(bolasExtraidas) {
+            const bolas = bolasExtraidas || estadoGlobal.bolasExtraidas;
+            for (let i = 1; i <= 75; i++) {
+                const cell = document.getElementById(`bola-general-${i}`);
+                if (cell) {
+                    if (bolas.includes(i)) {
+                        cell.style.backgroundColor = varColor(i);
+                        cell.style.color = 'white';
+                    } else {
+                        cell.style.backgroundColor = '#ffffff';
+                        cell.style.color = '#000000';
+                    }
+                }
+            }
+            if (jugadorId === ADMIN_ID) {
+                renderizarBolasDisponiblesAdmin(bolas);
+            }
+        }
+        
+        function renderizarBolasDisponiblesAdmin(bolasExtraidas) {
+            const todasLasBolas = Array.from({ length: 75 }, (_, i) => i + 1);
+            const bolasDisponibles = todasLasBolas.filter(bola => !bolasExtraidas.includes(bola));
+
+            const container = document.getElementById('bolas-disponibles');
+            container.textContent = bolasDisponibles.join(', ');
+            document.getElementById('count-bolas-disponibles').textContent = bolasDisponibles.length;
+        }
+
+        function varColor(numero) {
+            if (numero >= 1 && numero <= 15) return '#007bff'; // B - Azul
+            if (numero >= 16 && numero <= 30) return '#28a745'; // I - Verde
+            if (numero >= 31 && numero <= 45) return '#ffc107'; // N - Amarillo
+            if (numero >= 46 && numero <= 60) return '#dc3545'; // G - Rojo
+            if (numero >= 61 && numero <= 75) return '#6f42c1'; // O - Púrpura
+            return '#333';
+        }
+
+        function renderizarUltimasBolas(ultimaBola) {
+            const container = document.getElementById('display-ultimas-bolas');
+            const bolasExtraidas = estadoGlobal.bolasExtraidas;
+            const ultimasCinco = bolasExtraidas.slice(-5);
+            
+            container.innerHTML = ultimasCinco.map(bola => {
+                const isUltima = bola === ultimaBola;
+                return `<span class="bola ${isUltima ? 'nueva' : ''}" style="background-color: ${varColor(bola)};">${bola}</span>`;
+            }).join('');
+            
+            if (bolasExtraidas.length === 0) {
+                 container.innerHTML = '--';
+            }
+        }
+
+        function actualizarDisplayPremio() {
+            const premio = estadoGlobal.premioAcumulado || 0;
+            document.getElementById('display-premio').textContent = `$${premio.toFixed(2)}`;
+            document.getElementById('display-jugadores').textContent = estadoGlobal.totalJugadores;
+        }
+        
+        function renderizarSolicitudesAdmin(containerId, solicitudes, tipo) {
+            const container = document.getElementById(containerId);
+            const countDisplay = (tipo === 'pago') ? document.getElementById('count-solicitudes-pendientes') : document.getElementById('count-reclamos-bingo');
+            
+            countDisplay.textContent = solicitudes.length;
+            container.innerHTML = '';
+            
+            if (solicitudes.length === 0) {
+                container.innerHTML = `<p style="text-align: center; color: #aaa;">No hay solicitudes pendientes de ${tipo}.</p>`;
+                return;
+            }
+
+            solicitudes.forEach((solicitud, index) => {
+                const item = document.createElement('div');
+                item.className = 'solicitud-item';
+                let infoHTML = '';
+                let actionsHTML = '';
+
+                if (tipo === 'pago') {
+                    infoHTML = `
+                        <div>
+                            <strong>Pago de ${solicitud.nombre}</strong> (UID: ${solicitud.userId.substring(0, 4)}...)<br>
+                            Monto: $${solicitud.monto.toFixed(2)} - ID Pago: ${solicitud.id.substring(0, 8)}
+                        </div>
+                    `;
+                    // Usamos una función anónima para pasar los argumentos a los handlers
+                    actionsHTML = `
+                        <button class="btn btn-success" onclick="aprobarPagoAdmin('${solicitud.id}', '${solicitud.userId}', '${solicitud.nombre}')">Aprobar</button>
+                        <button class="btn btn-danger" onclick="rechazarPagoAdmin('${solicitud.id}')">Rechazar</button>
+                    `;
+                } else if (tipo === 'bingo') {
+                    infoHTML = `
+                        <div>
+                            <strong>¡BINGO de ${solicitud.nombre}!</strong><br>
+                            Bolas extraídas: ${solicitud.bolasAlReclamo} - Cartón ID: ${solicitud.cartonId.substring(0, 8)}
+                        </div>
+                    `;
+                     // Usamos el índice para acceder al objeto reclamo en el estado global
+                     actionsHTML = `
+                        <button class="btn btn-success" onclick="aprobarBingoAdmin(estadoGlobal.reclamosBingo[${index}], ${index})">Confirmar</button>
+                        <button class="btn btn-danger" onclick="rechazarBingoAdmin(estadoGlobal.reclamosBingo[${index}], ${index})">Fallo</button>
+                    `;
+                }
+
+                item.innerHTML = `${infoHTML}<div class="solicitud-actions">${actionsHTML}</div>`;
+                container.appendChild(item);
+            });
+        }
+
+        // === MODAL PERSONALIZADO ===
+        function mostrarModal(title, message, primaryActionText, secondaryActionText = null, primaryActionCallback = null) {
+            const modal = document.getElementById('custom-modal');
+            document.getElementById('modal-title').innerHTML = title;
+            document.getElementById('modal-message').innerHTML = message;
+            const actionsContainer = document.getElementById('modal-actions');
+            actionsContainer.innerHTML = '';
+
+            const primaryBtn = document.createElement('button');
+            primaryBtn.className = 'btn';
+            primaryBtn.textContent = primaryActionText;
+            primaryBtn.onclick = () => {
+                if (primaryActionCallback) primaryActionCallback();
+                modal.style.display = 'none';
+            };
+            actionsContainer.appendChild(primaryBtn);
+
+            if (secondaryActionText) {
+                const secondaryBtn = document.createElement('button');
+                secondaryBtn.className = 'btn btn-danger';
+                secondaryBtn.textContent = secondaryActionText;
+                secondaryBtn.onclick = () => {
+                    modal.style.display = 'none';
+                };
+                actionsContainer.appendChild(secondaryBtn);
+            }
+
+            modal.style.display = 'flex';
+        }
+
+        // =================================================================
+        // === SETUP DE EVENTOS ===
+        // =================================================================
+
+        function setupEventListeners() {
+            // Eventos de Jugador
+            document.getElementById('btn-solicitar-carton').addEventListener('click', solicitarCarton);
+            document.getElementById('btn-cantar-bingo').addEventListener('click', cantarBingo);
+            
+            // Eventos del Administrador
+            if (jugadorId === ADMIN_ID) {
+                document.getElementById('btn-extraer-bola').addEventListener('click', extraerBola);
+                document.getElementById('btn-reiniciar-juego').addEventListener('click', reiniciarJuego);
+                document.getElementById('btn-iniciar-juego').addEventListener('click', iniciarJuegoAdmin);
+            }
+        }
+
+        // NOTA: DOMContentLoaded no es estrictamente necesario aquí ya que los scripts están al final,
+        // pero asegura que todos los elementos HTML estén disponibles antes de llamar a estas funciones.
+        document.addEventListener('DOMContentLoaded', () => {
+            // Estas llamadas ahora se hacen dentro de iniciarLogicaJuego
+            // para asegurar que Firebase se haya autenticado primero.
+        });
+    </script>
+</body>
+</html>
